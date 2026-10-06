@@ -1,0 +1,33 @@
+types:
+  ledger_131:
+    label: Sổ chi tiết 131
+    filename: ["131"]
+    content: [phai thu cua khach hang, phai thu khach hang]
+  ledger_331:
+    label: Sổ chi tiết 331
+    filename: ["331"]
+    content: [phai tra nguoi ban, phai tra cua khach hang, phai tra nha cung cap]
+  statement:
+    label: Sao kê tài khoản
+    filename: ["bs_", sao_ke, saoke, statement]
+    content: [account number, so du, sao ke tai khoan]
+  financial_statement:
+    label: Báo cáo tài chính
+    filename: [bctc, bao_cao_tai_chinh]
+    content: []
+  vat_return:
+    label: Tờ khai thuế GTGT
+    filename: [gtgt, vat, to_khai]
+    content: []
+  cic:
+    label: Báo cáo CIC
+    filename: [cic]
+    content: []
+  business_registration:
+    label: Đăng ký kinh doanh và hồ sơ pháp lý
+    filename: [dkkd, dang_ky_kinh_doanh, giay_chung_nhan]
+    content: []
+  inventory:
+    label: Chi tiết hàng tồn kho
+    filename: [ton_kho, nxt, hang_ton]
+    content: []

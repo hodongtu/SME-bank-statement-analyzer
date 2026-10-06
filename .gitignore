@@ -1,0 +1,12 @@
+.env
+docs/
+logs/
+__pycache__/
+*.pyc
+.DS_Store
+# Real dossiers never enter the repository; the synthetic cases do (testing reads them).
+# Regenerate with: python3 samples/make_samples.py && python3 samples/dummy_db/make_dummy_db.py
+samples/*
+!samples/make_samples.py
+!samples/case_demo/
+!samples/case_missing_data/

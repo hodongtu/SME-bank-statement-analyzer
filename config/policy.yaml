@@ -1,0 +1,112 @@
+# Thresholds, weights and classification dictionaries for the cash-flow report.
+# Every business number lives here; the Python code only reads and applies it.
+# Labels and usage texts are printed in the Vietnamese report and stay Vietnamese;
+# keyword lists are matched against accent-stripped Vietnamese narratives.
+version: 1
+
+analysis:
+  required_months: 12              # months required (BRD 2.1)
+  window_months: 13                # columns T-12 ... T (BRD 2.3)
+  full_month_min_day_share: 0.8    # a month is "full" when statements cover >= 80% of its days
+  min_overlap_months_financials: 6       # min statement months inside the financial-statement year
+  vat_required_months: 12          # the "12-month VAT" pillar (BRD 2.6c)
+  balance_tolerance_vnd: 1
+  base_currency: VND
+
+business_inflow_codes: [IN_01, IN_02]          # "business inflow after exclusions"
+business_outflow_codes: [OUT_01, OUT_02, OUT_04]    # "supplier payments and operating costs"
+
+coverage:                          # BRD 2.1 - warning thresholds
+  high:
+    missing_months_at_least: 2
+    revenue_coverage_below_pct: 50
+    balance_error_above_pct: 1
+  medium:
+    missing_months_at_least: 1
+    revenue_coverage_below_pct: 80
+  conclusion_by_level:
+    Tốt: Đầy đủ
+    Trung bình: Có hạn chế
+    Cao: Không đủ dữ liệu
+
+trend:                             # BRD 2.4a - last-3-month average vs monthly average
+  recent_months: 3
+  up_above_pct: 10
+  down_below_pct: -10
+
+partners:                          # BRD 2.5
+  top_n: 10
+  min_overlap_months: 9            # below this, cash / ledger-movement ratios are indicative only
+
+matching:
+  name_similarity_min: 0.90
+  legal_forms: [cong ty, cty, ct, ctcp, cttnhh, tnhh, trach nhiem huu han, co phan, cp, mtv,
+                mot thanh vien, hai thanh vien tro len, dntn, doanh nghiep tu nhan,
+                ho kinh doanh, hkd]
+  branch_markers: [chi nhanh, cn]
+
+scoring:                           # BRD 2.6b - weights
+  missing_points: 0                # points for an indicator that cannot be computed
+  indicators:
+    inflow_to_reported_revenue:
+      label: Tỷ lệ tiền vào KD / doanh thu BCTC
+      weight: 25
+      bands: [{from: 70, to: 130, points: 100}, {from: 50, to: 150, points: 60}]
+      otherwise: 20
+    vat_gap:
+      label: Chênh lệch với doanh thu VAT 12 tháng
+      weight: 25
+      bands: [{to: 15, points: 100}, {to: 30, points: 60}]
+      otherwise: 20
+    inflow_matched_131:
+      label: Tỷ lệ giá trị đối tác tiền vào match 131
+      weight: 20
+      bands: [{from: 70, points: 100}, {from: 50, points: 60}]
+      otherwise: 20
+    unclassified_share:
+      label: Tỷ lệ dòng tiền chưa xác định
+      weight: 15
+      bands: [{to: 5, points: 100}, {to: 20, points: 60}]
+      otherwise: 20
+    reported_vs_third_party:
+      label: Nhất quán BCTC KH và dữ liệu bên thứ ba
+      weight: 10
+      bands: [{to: 5, points: 100}, {to: 15, points: 60}]
+      otherwise: 20
+    trade_industry_legal:
+      label: Phù hợp dữ liệu XNK/ngành/pháp lý
+      weight: 5
+      levels: {Phù hợp: 100, Có chênh lệch giải thích được: 60, Không phù hợp đáng kể: 20}
+  rating:                          # BRD 2.6c
+    - {min: 80, label: Cao, usage: "Doanh thu có nhiều nguồn đối chiếu nhất quán; có thể sử dụng làm cơ sở chính, sau điều chỉnh ngoại lệ."}
+    - {min: 60, label: Trung bình, usage: "Có chênh lệch hoặc độ bao phủ chưa đầy đủ; sử dụng doanh thu thận trọng và yêu cầu giải trình điểm yếu."}
+    - {min: 0, label: Thấp, usage: "Dòng tiền không hỗ trợ đầy đủ doanh thu kê khai hoặc có tỷ trọng bất thường lớn; không dùng nguyên trạng để xác định nhu cầu vốn/trả nợ."}
+  insufficient:
+    label: Không đủ dữ liệu
+    usage: "Thiếu tối thiểu một trong ba trụ: sao kê đại diện, BCTC, VAT 12 tháng; phải nêu giới hạn."
+
+classification:
+  # Tier 1: the bank's own transaction name (most certain)
+  code_rules:
+    - {direction: OUT, category: OUT_05, names: [thu no goc, thu no lai, phi bao lanh, account transfer charges, thu phi]}
+    - {direction: OUT, category: OUT_03, names: [rut tien mat]}
+    - {direction: IN,  category: IN_02, names: [nop tien mat]}
+    - {direction: IN,  category: IN_09, names: [tra lai tien gui]}
+    - {direction: IN,  category: IN_03, names: [giai ngan]}
+  # Tier 3: keywords in the transfer narrative, first match wins
+  keyword_rules:
+    - {direction: IN,  category: IN_07, keywords: [hoan tien, hoan tra, dao giao dich, dao gd, refund, tra lai tien thua]}
+    - {direction: IN,  category: IN_03, keywords: [giai ngan, disbursement]}
+    - {direction: IN,  category: IN_04, keywords: [gop von, tang von, von gop]}
+    - {direction: IN,  category: IN_08, keywords: [tat toan, giai toa ky quy, hoan ky quy, rut tien gui]}
+    - {direction: IN,  category: IN_09, keywords: [lai tien gui, co tuc]}
+    - {direction: IN,  category: IN_02, keywords: [nop tien mat, nop tm]}
+    - {direction: IN,  category: IN_01, keywords: [tien hang, thanh toan hoa don, thanh toan don hang, ban hang, mua, dat hang]}
+    - {direction: OUT, category: OUT_04, keywords: [luong, bhxh, bao hiem xa hoi, bhyt, nop thue, thue gtgt, thue tndn, thue tncn, ngan sach nha nuoc, nsnn, kho bac, kbnn, mon bai]}
+    - {direction: OUT, category: OUT_02, keywords: [tien dien, dien luc, evn, tien nuoc, cap nuoc, nuoc sach]}
+    - {direction: OUT, category: OUT_05, keywords: [tra no, tra lai vay, tra goc, phi ngan hang, phi chuyen tien]}
+    - {direction: OUT, category: OUT_09, keywords: [gui tiet kiem, mo so tiet kiem, ky quy, tien gui co ky han]}
+    - {direction: OUT, category: OUT_07, keywords: [gop von, cho vay, cho muon]}
+    - {direction: OUT, category: OUT_10, keywords: [hoan tien, hoan tra, dao giao dich, refund, tra lai tien thua]}
+    - {direction: OUT, category: OUT_03, keywords: [rut tien mat]}
+    - {direction: OUT, category: OUT_01, keywords: [mua, tien hang, thanh toan, vat tu, nguyen lieu, hang hoa, hoa don, van chuyen]}

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HSoThueDTu xmlns="http://kekhaithue.gdt.gov.vn/TKhaiThue"><HSoKhaiThue><TTinChung><TTinTKhaiThue>
+<TKhaiThue><maTKhai>683</maTKhai><tenTKhai>Bộ báo cáo tài chính (B01a - DNN)(TT133/2016/TT-BTC)</tenTKhai>
+<KyKKhaiThue><kieuKy>Y</kieuKy><kyKKhai>2025</kyKKhai><kyKKhaiTuNgay>01/01/2025</kyKKhaiTuNgay><kyKKhaiDenNgay>31/12/2025</kyKKhaiDenNgay></KyKKhaiThue></TKhaiThue>
+<NNT><mst>9999000002</mst><tenNNT>CÔNG TY TNHH THƯƠNG MẠI MINH AN</tenNNT></NNT></TTinTKhaiThue></TTinChung>
+<CTieuTKhaiChinh><bctcDaKiemToan>0</bctcDaKiemToan><SoCuoiNam><ct110>1450000000</ct110><ct131>4290657273</ct131><ct140>3575547728</ct140><ct150>1787773864</ct150><ct200>11103978865</ct200><ct300>6107188375</ct300><ct400>4996790490</ct400><ct500>11103978865</ct500></SoCuoiNam><SoDauNam><ct110>1100000000</ct110><ct131>3861591546</ct131><ct140>3217992955</ct140><ct150>1608996477</ct150><ct200>9788580978</ct200><ct300>5383719537</ct300><ct400>4404861441</ct400><ct500>9788580978</ct500></SoDauNam></CTieuTKhaiChinh>
+<PLuc><PL_KQHDSXKD><NamNay><ct01>35755477280</ct01><ct10>35755477280</ct10><ct11>31464820006</ct11><ct20>4290657274</ct20><ct50>1072664318</ct50><ct60>858131454</ct60></NamNay><NamTruoc><ct01>32179929552</ct01><ct10>32179929552</ct10><ct11>28318338005</ct11><ct20>3861591547</ct20><ct50>965397886</ct50><ct60>772318309</ct60></NamTruoc></PL_KQHDSXKD></PLuc>
+</HSoKhaiThue></HSoThueDTu>

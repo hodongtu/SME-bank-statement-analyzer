@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HSoThueDTu xmlns="http://kekhaithue.gdt.gov.vn/TKhaiThue"><HSoKhaiThue><TTinChung><TTinTKhaiThue>
+<TKhaiThue><maTKhai>842</maTKhai><tenTKhai>TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG (Mẫu số 01/GTGT)</tenTKhai>
+<KyKKhaiThue><kieuKy>Q</kieuKy><kyKKhai>1/2026</kyKKhai><kyKKhaiTuNgay>01/01/2026</kyKKhaiTuNgay><kyKKhaiDenNgay>31/03/2026</kyKKhaiDenNgay></KyKKhaiThue></TKhaiThue>
+<NNT><mst>9999000003</mst><tenNNT>CÔNG TY TNHH DỊCH VỤ KIM NGÂN DEMO</tenNNT></NNT></TTinTKhaiThue></TTinChung>
+<CTieuTKhaiChinh><GiaTriVaThueGTGTHHDVMuaVao><ct23>1980000000</ct23><ct24>198000000</ct24></GiaTriVaThueGTGTHHDVMuaVao>
+<ct25>198000000</ct25><ct26>0</ct26>
+<HHDVBRaChiuThueGTGT><ct27>3300000000</ct27><ct28>330000000</ct28></HHDVBRaChiuThueGTGT>
+<ct29>0</ct29><HHDVBRaChiuTSuat10><ct32>3300000000</ct32><ct33>330000000</ct33></HHDVBRaChiuTSuat10><ct32a>0</ct32a>
+<TongDThuVaThueGTGTHHDVBRa><ct34>3300000000</ct34><ct35>330000000</ct35></TongDThuVaThueGTGTHHDVBRa>
+</CTieuTKhaiChinh></HSoKhaiThue></HSoThueDTu>

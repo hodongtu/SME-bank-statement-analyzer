@@ -1,0 +1,41 @@
+# How to read statements by source. A format with "columns" matches header names exactly;
+# a format with "header_synonyms" finds the header row by (accent-stripped Vietnamese) synonyms.
+formats:
+  - id: tcb_core
+    bank: Techcombank
+    columns:
+      account: account_number
+      currency: currency
+      entry_id: entry_id
+      debit: debit_amount
+      credit: credit_amount
+      narrative: narrative
+      txn_code: transaction_code
+      txn_name: transaction_name
+      txn_type: transaction_type
+      posted_at: date_time
+      cp_account: settlement_account_number
+      cp_name: settlement_customer_name
+      cp_tax_code: settlement_customer_tax_code
+      cp_bank: settlement_bank_name
+    date_formats: ["%m/%d/%y %H:%M", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y"]
+
+  - id: generic_vn
+    bank: ""
+    header_synonyms:
+      posted_at: [ngay giao dich, ngay gd, ngay hach toan, ngay, transaction date, date]
+      debit: [ghi no, so tien ghi no, phat sinh no, rut ra, tien ra, debit, no]
+      credit: [ghi co, so tien ghi co, phat sinh co, gui vao, tien vao, credit, co]
+      balance: [so du, so du cuoi, balance]
+      narrative: [noi dung, noi dung giao dich, dien giai, mo ta, description, narrative]
+      entry_id: [so but toan, so chung tu, so tham chieu, ma giao dich, reference]
+      cp_name: [ten doi ung, ten nguoi nhan, ten nguoi chuyen, doi tac, ten tai khoan doi ung]
+      cp_account: [tai khoan doi ung, so tai khoan doi ung, tk doi ung]
+      cp_tax_code: [ma so thue doi ung, mst doi ung]
+      cp_bank: [ngan hang doi ung]
+    required: [posted_at, debit, credit]
+    metadata_patterns:
+      account: 'so tai khoan\s*:?\s*([0-9]{6,20})'
+      bank: 'ngan hang\s*:?\s*([^,;]+)'
+      currency: 'loai tien\s*:?\s*([a-z]{3})'
+    date_formats: ["%d/%m/%Y", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"]

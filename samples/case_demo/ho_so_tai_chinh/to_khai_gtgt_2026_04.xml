@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<HSoThueDTu xmlns="http://kekhaithue.gdt.gov.vn/TKhaiThue"><HSoKhaiThue><TTinChung><TTinTKhaiThue>
+<TKhaiThue><maTKhai>842</maTKhai><tenTKhai>TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG (Mẫu số 01/GTGT)</tenTKhai>
+<KyKKhaiThue><kieuKy>M</kieuKy><kyKKhai>04/2026</kyKKhai><kyKKhaiTuNgay>01/04/2026</kyKKhaiTuNgay><kyKKhaiDenNgay>30/04/2026</kyKKhaiDenNgay></KyKKhaiThue></TKhaiThue>
+<NNT><mst>9999000002</mst><tenNNT>CÔNG TY TNHH THƯƠNG MẠI MINH AN</tenNNT></NNT></TTinTKhaiThue></TTinChung>
+<CTieuTKhaiChinh><GiaTriVaThueGTGTHHDVMuaVao><ct23>2636328645</ct23><ct24>263632864</ct24></GiaTriVaThueGTGTHHDVMuaVao>
+<ct25>263632864</ct25><ct26>0</ct26>
+<HHDVBRaChiuThueGTGT><ct27>3376832385</ct27><ct28>337683238</ct28></HHDVBRaChiuThueGTGT>
+<ct29>0</ct29><HHDVBRaChiuTSuat10><ct32>3376832385</ct32><ct33>337683238</ct33></HHDVBRaChiuTSuat10><ct32a>0</ct32a>
+<TongDThuVaThueGTGTHHDVBRa><ct34>3376832385</ct34><ct35>337683238</ct35></TongDThuVaThueGTGTHHDVBRa>
+</CTieuTKhaiChinh></HSoKhaiThue></HSoThueDTu>
