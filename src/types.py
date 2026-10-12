@@ -69,6 +69,9 @@ class StatementFile:
     has_balance: bool = False
     format_id: str = ""
     errors: list[str] = field(default_factory=list)
+    source: str = "file"
+    opening_balance: Decimal | None = None
+    closing_balance: Decimal | None = None
 
 
 @dataclass
@@ -100,12 +103,14 @@ class Ledger:
 class AnalyzerState(TypedDict, total=False):
     case_dir: str
     tax_code: str
+    customer_key: dict[str, Any]
     analysis_month: str
     report_date: str
     documents: list[CaseDocument]
     statements: list[StatementFile]
     transactions: list[Transaction]
     ledgers: dict[str, Ledger]
+    extracted_documents: list[Any]
     tax_filings: dict[str, Any]
     reference: dict[str, Any]
     facts: Any

@@ -10,23 +10,29 @@ from typing import Any, Callable
 from langgraph.graph import END, StateGraph
 
 from src.agents.calculator import cashflow, coverage, partners, scoring, trend
-from src.agents.calculator.period import build_period, in_window
+from src.agents.calculator.period import analysis_window, build_period, in_window
 from src.agents.transactions.counterparty import LENDER, RELATED, SELF, Directory, resolve
 from src.agents.transactions.transaction_classification import classify
 from src.facts import Facts
 from src.agents.documents.document_classification import identify
 from src.agents.documents.document_discovery import discover
-from src.agents.extraction.ledger_extraction import read_ledger
+from src.agents.extraction.contract import FAILED
+from src.agents.extraction.router import ExtractionRouter
+from src.agents.extraction.statement_extraction import transactions_from_records
 from src.agents.transactions.normalize import drop_duplicates, pair_internal_transfers, split_currency
-from src.agents.extraction.statement_extraction import read_statement
 from src.settings import get_settings
 from src.tools import blwl, cic, fraud, registry, t24, trade, virac
-from src.types import AnalyzerState
-from src.utils.reading.tax_xml import parse_tax_xml
+from src.tools.customer_keys import resolve_customer_key
+from src.types import AnalyzerState, StatementFile
+from src.utils.common import normalize_text
 
-NODE_ORDER = ("read_documents", "parse_documents", "collect_reference_data",
+NODE_ORDER = ("read_documents", "parse_documents", "fetch_statements", "collect_reference_data",
               "classify_transactions", "analyse", "lookup_partners", "grade", "render_report")
+SYSTEM_SOURCE = "Hệ thống T24"
+UNREADABLE_FILE = "Không đọc được giao dịch; dùng dữ liệu hệ thống T24"
 NOT_WIRED = "chưa kết nối nguồn dữ liệu"
+FORMAT_RANK = {"xml": 0, "xlsx": 1, "xls": 1, "xlsm": 1, "pdf": 2}
+NO_TAX_CODE = "chưa xác định được mã số thuế khách hàng"
 
 
 @dataclass
@@ -49,6 +55,10 @@ def _lookup(executor: Any, label: str, call: Callable[[], Any]) -> tuple[Any, st
         return None, f"{label} lỗi: {type(exc).__name__}: {exc}"[:200]
 
 
+def _is_tcb(record: StatementFile) -> bool:
+    return record.format_id == "tcb_core" or "techcombank" in normalize_text(record.bank)
+
+
 def _step(state: AnalyzerState, line: str) -> list[str]:
     return [*state.get("steps", []), line]
 
@@ -57,6 +67,7 @@ class BankStatementAnalyzer:
     def __init__(self, config: Any, settings: dict | None = None) -> None:
         self.config = config
         self.settings = settings or get_settings()
+        self.router = getattr(config, "extraction_router", None) or ExtractionRouter(self.settings)
         graph = StateGraph(AnalyzerState)
         for name in NODE_ORDER:
             graph.add_node(name, getattr(self, f"_node_{name}"))
@@ -78,90 +89,179 @@ class BankStatementAnalyzer:
 
     def _node_parse_documents(self, state: AnalyzerState) -> AnalyzerState:
         settings = self.settings
-        base = settings["analysis"]["base_currency"]
         statements, transactions, ledgers = [], [], {}
-        filings: dict[str, Any] = {"files": [], "vat_out": {}, "vat_in": {}, "reported_revenue": {},
-                                   "taxpayer_name": "", "unread": []}
+        filings: dict[str, Any] = {"files": [], "vat_out": {}, "vat_in": {}, "vat_rank": {}, "vat_in_rank": {},
+                                   "reported_revenue": {}, "taxpayer_name": "", "unread": []}
         labels = {k: v["label"] for k, v in settings["document_types"].items()}
+        self.router.reset()
+        extracted_documents = []
         for document in state["documents"]:
-            kind = document.doc_type
-            if kind == "statement":
-                record, rows = read_statement(document.path, settings["statement_formats"], base)
-                statements.append(record)
-                transactions.extend(rows)
-            elif kind in ("ledger_131", "ledger_331"):
-                ledger = read_ledger(document.path, kind[-3:])
+            extracted = self.router.extract(document)
+            extracted_documents.append(extracted)
+            if extracted.statement is not None:
+                extracted.statement.source = extracted.backend if extracted.backend != "local" else "file"
+                statements.append(extracted.statement)
+                transactions.extend(extracted.transactions)
+            elif extracted.ledger is not None:
+                ledger = extracted.ledger
                 if ledger.account in ledgers:
                     ledger.errors.append(f"Hồ sơ có nhiều hơn một sổ {ledger.account}; chỉ dùng {ledgers[ledger.account].filename}")
                 else:
                     ledgers[ledger.account] = ledger
-            elif kind == "tax_xml":
-                self._read_filing(document.path, filings)
+            elif extracted.vat is not None or extracted.financials is not None or extracted.source_format == "xml":
+                self._add_filing(extracted, filings)
             else:
-                filings["unread"].append({"file": document.filename,
-                                          "label": labels.get(kind, "Không nhận diện được loại hồ sơ")})
-        transactions, duplicates = drop_duplicates(transactions)
-        transactions, foreign = split_currency(transactions, base)
+                filings["unread"].append({"file": document.filename, "reason": extracted.reason,
+                                          "label": labels.get(extracted.doc_type, "Không nhận diện được loại hồ sơ")})
         return {**state, "statements": statements, "transactions": transactions, "ledgers": ledgers,
-                "tax_filings": {**filings, "duplicates": duplicates, "foreign": len(foreign)},
-                "steps": _step(state, f"Parse: {len(statements)} statements, {len(transactions)} transactions "
-                                      f"({duplicates} duplicates dropped, {len(foreign)} foreign-currency), "
+                "extracted_documents": extracted_documents, "tax_filings": filings,
+                "steps": _step(state, f"Parse: {len(statements)} statement files, {len(transactions)} transactions, "
                                       f"ledgers {', '.join(sorted(ledgers)) or 'none'}, "
-                                      f"{len(filings['files'])} tax XML filings")}
+                                      f"{len(filings['files'])} tax filings")}
 
     @staticmethod
-    def _read_filing(path: Path, filings: dict) -> None:
-        result = parse_tax_xml(str(path))
-        entry = {"file": path.name, "label": "Hồ sơ thuế XML", "period": "—", "rows": 0,
-                 "error": result.error}
-        if result.kind == "vat" and not result.error:
-            entry["label"] = "Tờ khai thuế GTGT"
-            months = sorted(result.vat_revenue)
-            entry["period"] = ", ".join(months)
-            entry["rows"] = len(months)
-            for month, value in result.vat_revenue.items():
-                key = f"{month[3:]}-{month[:2]}"
-                if key not in filings["vat_out"] or filings["vat_out"][key][1]:
-                    filings["vat_out"][key] = value
-            for month, value in result.vat_purchases.items():
-                key = f"{month[3:]}-{month[:2]}"
-                if key not in filings["vat_in"] or filings["vat_in"][key][1]:
-                    filings["vat_in"][key] = value
-        elif result.kind == "financial_statement" and not result.error:
-            entry["label"] = "Báo cáo tài chính"
-            statement = result.financial_statement_extraction or {}
-            income = statement.get("income_statement") or {}
-            for label, _, *values in income.get("line_items", []):
-                if label == "Doanh thu bán hàng và cung cấp dịch vụ":
-                    for year_label, value in zip(income.get("years", []), values):
-                        if value is not None:
-                            filings["reported_revenue"][int(year_label.split()[-1])] = float(value)
-            entry["period"] = (statement.get("reporting_period") or {}).get("period_label", "—")
-            entry["rows"] = len(income.get("line_items", []))
-        if result.taxpayer_name:
-            filings["taxpayer_name"] = filings["taxpayer_name"] or result.taxpayer_name
+    def _merge_vat(series: dict, ranks: dict, values: dict, rank: int) -> list[str]:
+        """Monthly beats quarterly-estimated; at equal footing the better-ranked format wins."""
+
+        clashes = []
+        for month, value in values.items():
+            current = series.get(month)
+            if current is None or (current[1] and (not value[1] or rank < ranks[month])) \
+                    or (current[1] == value[1] and rank < ranks[month]):
+                if current is not None and not current[1] and not value[1] and abs(current[0] - value[0]) > 1:
+                    clashes.append(month)
+                series[month], ranks[month] = value, rank
+            elif not current[1] and not value[1] and abs(current[0] - value[0]) > 1:
+                clashes.append(month)
+        return clashes
+
+    def _add_filing(self, extracted: Any, filings: dict) -> None:
+        vat, financials = extracted.vat, extracted.financials
+        label = {"vat_return": "Tờ khai thuế GTGT", "financial_statement": "Báo cáo tài chính"}.get(
+            extracted.doc_type, "Hồ sơ thuế XML")
+        if extracted.status == FAILED and extracted.source_format == "xml":
+            label = "Hồ sơ thuế XML"
+        if extracted.backend != "local":
+            label += " (dịch vụ đọc tài liệu IT)"
+        entry = {"file": extracted.document.filename, "label": label, "period": "—", "rows": 0,
+                 "error": extracted.reason if extracted.status == FAILED else "",
+                 "kind": extracted.doc_type, "format": extracted.source_format,
+                 "tax_code": extracted.tax_code, "taxpayer_name": extracted.taxpayer_name}
+        if vat is not None:
+            entry["period"], entry["rows"] = vat.period_label, len(vat.revenue)
+            rank = FORMAT_RANK.get(vat.source_format, len(FORMAT_RANK))
+            clashes = self._merge_vat(filings["vat_out"], filings["vat_rank"], vat.revenue, rank)
+            self._merge_vat(filings["vat_in"], filings["vat_in_rank"], vat.purchases, rank)
+            if clashes:
+                entry["error"] = ("Trùng tháng " + ", ".join(f"{m[5:]}/{m[:4]}" for m in sorted(clashes))
+                                  + " với tờ khai khác có số liệu khác; dùng nguồn ưu tiên hơn")
+        elif financials is not None:
+            entry["period"], entry["rows"] = financials.period_label, financials.line_count
+            filings["reported_revenue"].update(financials.revenue_by_year)
+        if extracted.taxpayer_name:
+            filings["taxpayer_name"] = filings["taxpayer_name"] or extracted.taxpayer_name
         filings["files"].append(entry)
 
-    # -- 2. customer reference data -------------------------------------------
+    # -- 2. TCB statements from the system --------------------------------------
+
+    def _node_fetch_statements(self, state: AnalyzerState) -> AnalyzerState:
+        settings, executor = self.settings, self.config.query_executor
+        base = settings["analysis"]["base_currency"]
+        key = resolve_customer_key(state["tax_filings"]["files"], state.get("tax_code", ""))
+        steps = [*state.get("steps", []), *(f"Customer key: {warning}" for warning in key.warnings)]
+        if key.usable:
+            steps.append(f"Customer key: tax code {key.tax_code} from {key.source_file} ({key.source_field})")
+        report_date = date.fromisoformat(state["report_date"]) if state.get("report_date") else date.today()
+        start, end, month = analysis_window(report_date, state.get("analysis_month", ""), settings)
+
+        statements, transactions = list(state["statements"]), list(state["transactions"])
+        analysis_month = state.get("analysis_month", "")
+        tcb_files = [r for r in statements if r.source == "file" and _is_tcb(r)]
+        use_files = any(r.row_count for r in tcb_files)
+
+        seed: dict[str, Any] = {"errors": {}}
+        accounts, records, reason = None, [], ""
+        if not key.usable:
+            reason = f"Sao kê TCB: {NO_TAX_CODE}"
+        else:
+            accounts, reason = _lookup(executor, "T24", lambda: t24.get_t24_accounts.invoke(
+                {"tax_code": key.tax_code, "executor": executor}))
+            seed["t24_accounts"] = accounts
+            if reason:
+                seed["errors"]["t24_accounts"] = reason
+            if use_files:
+                reason = ""
+            elif accounts:
+                records, reason = _lookup(executor, "Sao kê TCB", lambda: t24.get_t24_transactions.invoke(
+                    {"tax_code": key.tax_code, "date_from": start.isoformat(),
+                     "date_to": (end + timedelta(days=1)).isoformat(), "executor": executor}))
+            elif not reason:
+                reason = "Sao kê TCB: T24 không có tài khoản nào cho mã số thuế này"
+
+        if use_files:
+            steps.append(f"TCB statements: {len(tcb_files)} uploaded file(s) used; T24 transactions not queried")
+        elif accounts and not reason:
+            spec = next(f for f in settings["statement_formats"] if f["id"] == "tcb_core")
+            rows, errors = transactions_from_records(records, spec, "Techcombank", SYSTEM_SOURCE, base)
+            for record in tcb_files:
+                record.errors.append(UNREADABLE_FILE)
+            for account in accounts:
+                number = str(account["account_no"])
+                opened = account.get("opened_on")
+                own = [t for t in rows if t.account == number]
+                statements.append(StatementFile(
+                    filename=SYSTEM_SOURCE, bank="Techcombank", accounts=[number],
+                    currencies=[str(account.get("currency") or base)],
+                    period_start=max(start, date.fromisoformat(str(opened))) if opened else start,
+                    period_end=end, period_declared=True, row_count=len(own), format_id="t24_query",
+                    errors=list(errors), source="system"))
+                transactions.extend(own)
+            analysis_month = month
+            steps.append(f"TCB statements from T24: {len(accounts)} accounts, {len(rows)} transactions, "
+                         f"{start:%Y-%m-%d} to {end:%Y-%m-%d}")
+        else:
+            reason = reason or "T24 không trả về dữ liệu"
+            detail = reason.removeprefix("Sao kê TCB: ")
+            seed["errors"]["t24_transactions"] = f"Không có file sao kê TCB tải lên và không lấy được từ hệ thống ({detail})"
+            steps.append(f"TCB statements: no uploaded file and T24 not available ({reason})")
+
+        transactions, duplicates = drop_duplicates(transactions)
+        transactions, foreign = split_currency(transactions, base)
+        steps.append(f"Merged: {len(transactions)} transactions ({duplicates} duplicates dropped, "
+                     f"{len(foreign)} foreign-currency)")
+        return {**state, "statements": statements, "transactions": transactions, "tax_code": key.tax_code,
+                "customer_key": {**key._asdict(), "usable": key.usable}, "analysis_month": analysis_month,
+                "reference": seed, "tax_filings": {**state["tax_filings"], "duplicates": duplicates,
+                                                   "foreign": len(foreign)},
+                "steps": steps}
+
+    # -- 3. customer reference data -------------------------------------------
 
     def _node_collect_reference_data(self, state: AnalyzerState) -> AnalyzerState:
-        executor, tax_code = self.config.query_executor, state["tax_code"]
+        executor = self.config.query_executor
+        tax_code, usable = state.get("tax_code", ""), state.get("customer_key", {}).get("usable", False)
+        steps = list(state.get("steps", []))
 
         def ask(tool, **extra):
             return lambda: tool.invoke({"tax_code": tax_code, "executor": executor, **extra})
 
-        reference: dict[str, Any] = {"errors": {}}
-        for key, label, tool in (("registry", "ĐKKD", registry.get_registration),
-                                 ("t24_accounts", "T24", t24.get_t24_accounts),
-                                 ("fraud", "Fraud", fraud.get_fraud_screening),
-                                 ("cic", "CIC", cic.get_cic_debt),
-                                 ("blwl", "BL/WL", blwl.get_blwl_hits),
-                                 ("virac", "VIRAC", virac.get_virac_financials),
-                                 ("trade", "XNK", trade.get_trade_turnover)):
-            value, reason = _lookup(executor, label, ask(tool))
-            reference[key] = value
+        seed = state.get("reference") or {"errors": {}}
+        reference: dict[str, Any] = {"errors": dict(seed.get("errors", {}))}
+        for source, label, tool in (("registry", "ĐKKD", registry.get_registration),
+                                    ("t24_accounts", "T24", t24.get_t24_accounts),
+                                    ("fraud", "Fraud", fraud.get_fraud_screening),
+                                    ("cic", "CIC", cic.get_cic_debt),
+                                    ("blwl", "BL/WL", blwl.get_blwl_hits),
+                                    ("virac", "VIRAC", virac.get_virac_financials),
+                                    ("trade", "XNK", trade.get_trade_turnover)):
+            if source in seed:
+                reference[source] = seed[source]
+                continue
+            value, reason = (_lookup(executor, label, ask(tool)) if usable
+                             else (None, f"{label}: {NO_TAX_CODE}"))
+            reference[source] = value
             if reason:
-                reference["errors"][key] = reason
+                reference["errors"][source] = reason
         if reference["registry"] == {}:
             reference["registry"], reference["errors"]["registry"] = None, "ĐKKD không có dữ liệu cho mã số thuế này"
 
@@ -181,10 +281,10 @@ class BankStatementAnalyzer:
         reference["balances"] = balances
         found = sum(1 for k in ("registry", "t24_accounts", "fraud", "cic", "blwl", "virac", "trade")
                     if reference[k] not in (None, [], {}))
-        return {**state, "reference": reference,
-                "steps": _step(state, f"Reference data: {found}/7 sources returned data")}
+        steps.append(f"Reference data: {found}/7 sources returned data")
+        return {**state, "reference": reference, "steps": steps}
 
-    # -- 3. classification ----------------------------------------------------
+    # -- 4. classification ----------------------------------------------------
 
     def _customer_name(self, state: AnalyzerState) -> str:
         registry_row = state["reference"].get("registry") or {}
@@ -262,7 +362,7 @@ class BankStatementAnalyzer:
         else:
             facts.set("stmt.balance_reconciled", all(c["errors"] == 0 for c in checks))
 
-        accounts = sorted({t.account for t in transactions})
+        accounts = sorted({a for record in statements for a in record.accounts} | {t.account for t in transactions})
         if reference.get("fraud") is None:
             reason = reference["errors"].get("fraud", NOT_WIRED)
             facts.mark_missing("fraud.alert_accounts", reason)
@@ -382,14 +482,14 @@ class BankStatementAnalyzer:
         return {**state, "report_markdown": report,
                 "steps": _step(state, f"Render: {len(report):,} characters")}
 
-    def run(self, case_dir: str | Path, tax_code: str, analysis_month: str = "",
+    def run(self, case_dir: str | Path, tax_code: str = "", analysis_month: str = "",
             report_date: str = "") -> dict:
         return self.graph.invoke({"case_dir": str(case_dir), "tax_code": tax_code,
                                   "analysis_month": analysis_month, "report_date": report_date,
                                   "steps": []})
 
 
-def run_analysis(case_dir: str | Path, config: Any, tax_code: str, analysis_month: str = "",
+def run_analysis(case_dir: str | Path, config: Any, tax_code: str = "", analysis_month: str = "",
                  report_date: date | None = None) -> AnalyzerResult:
     """Analyse ONE customer's statements, from its upload folder to a Markdown report."""
 

@@ -14,11 +14,13 @@ from pathlib import Path
 from openpyxl import Workbook
 
 ROOT = Path(__file__).resolve().parent
+SYSTEM_SOURCE = ROOT / "dummy_db" / "source"
 NS = "http://kekhaithue.gdt.gov.vn/TKhaiThue"
 TCB_HEADER = ["#", "account_number", "currency", "entry_id", "debit_amount", "credit_amount", "narrative",
               "transaction_code", "transaction_name", "date_time", "transaction_type",
               "settlement_account_number", "settlement_customer_name", "settlement_customer_tax_code",
               "settlement_bank_code", "settlement_bank_name"]
+EXCEL_VAT_MONTHS = {(2025, 7), (2025, 8), (2025, 9)}
 MONTHS = [(2025, m) for m in range(7, 13)] + [(2026, m) for m in range(1, 7)]
 
 DEMO = {
@@ -91,6 +93,27 @@ def write_vat(path: Path, case: dict, year: int, period: int, kind: str, sales: 
 <TongDThuVaThueGTGTHHDVBRa><ct34>{sales}</ct34><ct35>{tax_out}</ct35></TongDThuVaThueGTGTHHDVBRa>
 </CTieuTKhaiChinh></HSoKhaiThue></HSoThueDTu>
 """, encoding="utf-8")
+
+
+def write_vat_excel(path: Path, case: dict, year: int, month: int, sales: int, purchases: int) -> None:
+    book = Workbook()
+    sheet = book.active
+    for row in (
+        ["TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG (Mẫu số 01/GTGT)"],
+        ["[01]", f"Kỳ tính thuế: Tháng {month} năm {year}"],
+        ["[04]", "Tên người nộp thuế:", case["name"]],
+        ["[05]", "Mã số thuế:", case["tax_code"]],
+        [],
+        ["STT", "Chỉ tiêu", "Mã chỉ tiêu", "Giá trị HHDV (chưa có thuế GTGT)", "Mã chỉ tiêu", "Thuế GTGT"],
+        ["1", "Giá trị và thuế GTGT của hàng hoá, dịch vụ mua vào", "[23]", purchases, "[24]", purchases // 10],
+        ["2", "Hàng hoá, dịch vụ bán ra không chịu thuế GTGT", "[26]", 0],
+        ["3", "Hàng hoá, dịch vụ bán ra chịu thuế GTGT", "[27]", sales, "[28]", sales // 10],
+        ["4", "Hàng hoá, dịch vụ bán ra chịu thuế suất 10%", "[32]", sales, "[33]", sales // 10],
+        ["5", "Hàng hoá, dịch vụ bán ra không phải kê khai, tính nộp thuế GTGT", "[32a]", 0],
+        ["6", "Tổng doanh thu và thuế GTGT của HHDV bán ra", "[34]", sales, "[35]", sales // 10],
+    ):
+        sheet.append(row)
+    book.save(path)
 
 
 def write_financial_statement(path: Path, case: dict, year: int, revenue: int, prior_revenue: int) -> None:
@@ -188,7 +211,8 @@ def make_demo() -> None:
     tcb.add(datetime(2025, 7, 1, 8, 30), "IN", 2_000_000_000, "", "Giai ngan khoan vay", "421", "")
     tcb.add(datetime(2025, 12, 20, 15, 0), "OUT", 100_000_000, "Chuyen tien cho ong Nguyen Van An")
     tcb.add(datetime(2026, 6, 30, 16, 0), "IN", 5_000, "", "Tra lai tien gui", "381", "")
-    tcb.write(target / "ho_so_tai_chinh" / "BS_TCB_MINHAN.csv")
+    SYSTEM_SOURCE.mkdir(parents=True, exist_ok=True)
+    tcb.write(SYSTEM_SOURCE / "BS_TCB_MINHAN.csv")
 
     other.sort(key=lambda r: r[0])
     book = Workbook()
@@ -217,7 +241,12 @@ def make_demo() -> None:
     book.save(target / "ho_so_tai_chinh" / "so_chi_tiet_331_MINHAN.xlsx")
 
     for (year, month), (sales, purchases) in vat.items():
-        write_vat(target / "ho_so_tai_chinh" / f"to_khai_gtgt_{year}_{month:02d}.xml", case, year, month, "M", sales, purchases)
+        if (year, month) in EXCEL_VAT_MONTHS:
+            write_vat_excel(target / "ho_so_tai_chinh" / f"to_khai_gtgt_{year}_{month:02d}.xlsx", case, year, month,
+                            sales, purchases)
+        else:
+            write_vat(target / "ho_so_tai_chinh" / f"to_khai_gtgt_{year}_{month:02d}.xml", case, year, month, "M",
+                      sales, purchases)
     revenue_2025 = sum(v[0] for (y, _), v in vat.items() if y == 2025) * 2
     write_financial_statement(target / "ho_so_tai_chinh" / "bctc_2025.xml", case, 2025, revenue_2025, int(revenue_2025 * 0.9))
 

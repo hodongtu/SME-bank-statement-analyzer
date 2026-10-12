@@ -26,7 +26,6 @@ AMOUNT_FIELDS = ("opening_debit", "opening_credit", "debit", "credit",
                  "closing_debit", "closing_credit")
 _TOTAL = re.compile(r"^(tong( cong)?|cong)( phat sinh)?$")
 _LEADING_NUMBERS = re.compile(r"^[\s\d.,%()\-]*")
-TOLERANCE = Decimal(1)
 
 
 def _find_header(rows: list[list[str]]) -> tuple[int, dict[str, int]] | None:
@@ -122,15 +121,4 @@ def read_ledger(path: str | Path, account: str) -> Ledger:
 
     if not ledger.entries:
         ledger.errors.append("Sổ không có đối tượng nào")
-        return ledger
-    debit = sum((e.debit for e in ledger.entries), Decimal(0))
-    credit = sum((e.credit for e in ledger.entries), Decimal(0))
-    if ledger.reported_debit is None:
-        ledger.errors.append("Sổ không có dòng Tổng để đối chiếu số đọc được")
-    else:
-        for side, read, printed in (("Nợ", debit, ledger.reported_debit),
-                                    ("Có", credit, ledger.reported_credit)):
-            if abs(read - printed) > TOLERANCE:
-                ledger.errors.append(
-                    f"Tổng phát sinh {side} đọc được {read:,.0f} khác dòng Tổng của sổ {printed:,.0f}")
     return ledger

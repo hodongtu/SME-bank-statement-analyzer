@@ -50,26 +50,17 @@ description: Cash-flow analysis from bank statements, structured as BRD sections
 
 ## 5. Mức độ tin cậy doanh thu theo dòng tiền
 
-### a) Chấm điểm theo bộ trọng số
-
 {{ScoreTable}}
-
-### b) Ba trụ dữ liệu
-
-{{PillarTable}}
 
 {{RatingConclusion}}
 
 ## Phụ lục
 
-### A. Cách phân loại giao dịch
 
-{{LabelSourceTable}}
-
-### B. Giao dịch chưa xác định bản chất có giá trị lớn nhất
+### A. Giao dịch chưa xác định bản chất có giá trị lớn
 
 {{UnclassifiedTable}}
 
-### C. Dữ liệu chưa thu thập được
+### B. Dữ liệu chưa thu thập được
 
 {{MissingDataTable}}

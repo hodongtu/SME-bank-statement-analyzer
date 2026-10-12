@@ -27,12 +27,22 @@ class Period:
 def covered_days(statements: list[StatementFile]) -> set[date]:
     days: set[date] = set()
     for record in statements:
-        if record.period_start and record.period_end and record.row_count:
+        if record.period_start and record.period_end and (record.row_count or record.period_declared):
             day = record.period_start
             while day <= record.period_end:
                 days.add(day)
                 day += timedelta(days=1)
     return days
+
+
+def analysis_window(report_date: date, analysis_month: str, settings: dict) -> tuple[date, date, str]:
+    """(first day of T-12, last day of T, T). T defaults to the last month that ended before report_date."""
+
+    current = analysis_month or month_key(report_date.replace(day=1) - timedelta(days=1))
+    first = shift_month(current, -(settings["analysis"]["window_months"] - 1))
+    year, month = (int(p) for p in current.split("-"))
+    start = date(*(int(p) for p in first.split("-")), 1)
+    return start, date(year, month, calendar.monthrange(year, month)[1]), current
 
 
 def build_period(statements: list[StatementFile], transactions: list[Transaction],

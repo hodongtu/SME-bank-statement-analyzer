@@ -14,6 +14,7 @@ from src.utils.paths import PROJECT_ROOT
 CONFIG_DIR = PROJECT_ROOT / "config"
 INDICATORS = ("inflow_to_reported_revenue", "vat_gap", "inflow_matched_131",
               "unclassified_share", "reported_vs_third_party", "trade_industry_legal")
+BACKENDS = ("local", "it_service")
 LEVELS = ("Tốt", "Trung bình", "Cao")
 
 
@@ -104,7 +105,18 @@ def load_settings(directory: Path | str | None = None) -> dict[str, Any]:
     if not documents:
         raise SettingsError("config/documents.yaml: no document type declared")
 
-    return {**policy, "statement_formats": formats, "document_types": documents}
+    extraction = _read("extraction.yaml", base)
+    for dotted in ("routing.structured", "routing.ocr", "formats.structured", "formats.ocr",
+                   "it_service.base_url_env", "it_service.token_env", "it_service.timeout_seconds",
+                   "it_service.max_calls_per_run", "it_service.doc_types"):
+        _need(extraction, dotted, "extraction.yaml")
+    for group, backend in extraction["routing"].items():
+        if backend not in BACKENDS:
+            raise SettingsError(f"config/extraction.yaml: routing.{group} must be one of {BACKENDS}")
+        if group not in extraction["formats"]:
+            raise SettingsError(f"config/extraction.yaml: routing.{group} has no formats entry")
+
+    return {**policy, "statement_formats": formats, "document_types": documents, "extraction": extraction}
 
 
 @lru_cache(maxsize=1)

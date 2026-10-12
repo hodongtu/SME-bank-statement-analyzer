@@ -47,6 +47,11 @@ def result_json(result) -> dict:
     payload = {key: _plain(analysis.get(key)) for key in keep}
     payload["period"] = _plain(analysis.get("period"))
     payload["tax_code"] = result.state.get("tax_code")
+    payload["customer_key"] = result.state.get("customer_key")
+    payload["documents"] = [{"file": e.document.filename, "doc_type": e.doc_type, "backend": e.backend,
+                             "status": e.status, "reason": e.reason, "warnings": e.warnings,
+                             "provenance": _plain(e.provenance)}
+                            for e in result.state.get("extracted_documents", [])]
     payload["facts"] = _plain(result.facts.to_dict())
     payload["steps"] = result.steps
     return payload

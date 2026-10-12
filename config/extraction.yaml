@@ -1,0 +1,16 @@
+# Which backend reads each group of uploaded files. This is the single switch for go-live:
+# set routing.ocr to it_service and fill IT_EXTRACTION_URL / IT_EXTRACTION_TOKEN in .env.
+routing:
+  structured: local      # .csv .xlsx .xls .xlsm .xml - always read by this project
+  ocr: local             # .pdf and images - development: local (not read yet); go-live: it_service
+
+formats:
+  structured: [.csv, .xlsx, .xls, .xlsm, .xml]
+  ocr: [.pdf, .jpg, .jpeg, .png, .tif, .tiff]
+
+it_service:
+  base_url_env: IT_EXTRACTION_URL
+  token_env: IT_EXTRACTION_TOKEN
+  timeout_seconds: 120
+  max_calls_per_run: 30
+  doc_types: [statement, vat_return, financial_statement]

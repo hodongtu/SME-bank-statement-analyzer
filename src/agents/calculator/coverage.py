@@ -11,12 +11,15 @@ from src.types import Ledger, StatementFile, Transaction
 from src.utils.numbers import month_label
 
 
+SOURCE_NOTES = {"system": " (hệ thống T24)", "it_service": " (dịch vụ đọc tài liệu IT)"}
+
+
 def inventory(statements: list[StatementFile], ledgers: dict[str, Ledger],
               filings: dict) -> list[dict]:
     rows = []
     for record in statements:
         rows.append({
-            "source": f"Sao kê {record.bank}", "file": record.filename,
+            "source": f"Sao kê {record.bank}" + SOURCE_NOTES.get(record.source, ""), "file": record.filename,
             "account": ", ".join(record.accounts) or "—",
             "currency": ", ".join(record.currencies) or "—",
             "period": _span(record.period_start, record.period_end)

@@ -33,3 +33,4 @@ class Config:
     max_classifier_calls: int = 6
     patterns_per_call: int = 80
     manual_trade_assessment: str = ""
+    extraction_router: Any = None
